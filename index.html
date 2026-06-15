@@ -109,6 +109,12 @@
     .del-task { width: 18px; height: 18px; border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 11px; opacity: 0; border-radius: 3px; display: flex; align-items: center; justify-content: center; }
     .task:hover .del-task { opacity: 1; }
     .del-task:hover { background: rgba(224,92,106,.2); color: var(--danger); }
+    .btn-edit { width: 18px; height: 18px; border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 11px; opacity: 0; border-radius: 3px; display: flex; align-items: center; justify-content: center; }
+    .task:hover .btn-edit { opacity: 1; }
+    .btn-edit:hover { background: rgba(124,109,255,.2); color: var(--accent); }
+    .task-dates { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 3px; }
+    .task-date { font-size: 10px; color: var(--muted); }
+    .task-date.overdue { color: var(--danger); }
     .add-task { display: flex; gap: 6px; margin-top: 8px; }
     .add-input { flex: 1; padding: 7px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 12px; outline: none; }
     .add-input:focus { border-color: var(--accent); }
@@ -266,7 +272,10 @@
     <button class="tab" onclick="setView('focus')">Foco (Top 3)</button>
     <button class="tab" onclick="setView('category')">Por Categoria</button>
   </div>
-  <button class="btn-add" onclick="openModal()">+ Novo Projeto</button>
+  <div style="display:flex;gap:8px">
+    <button class="btn-sm btn-sec" onclick="exportData()" title="Exportar todos os projetos como JSON">⬇ Exportar</button>
+    <button class="btn-add" onclick="openModal()">+ Novo Projeto</button>
+  </div>
 </nav>
 
 <main class="main" id="main"></main>
@@ -281,6 +290,32 @@
       Entrar com Google
     </button>
     <p class="auth-note">Seus dados ficam privados e acessíveis apenas por você.</p>
+  </div>
+</div>
+
+<div class="overlay" id="task-overlay">
+  <div class="modal">
+    <h2>Editar Tarefa</h2>
+    <div class="modal-body">
+      <div class="fgrp">
+        <div class="flbl">Descrição</div>
+        <input type="text" class="finput" id="te-texto" placeholder="Descrição da tarefa">
+      </div>
+      <div class="two-col">
+        <div class="fgrp">
+          <div class="flbl">📅 Data Agendada</div>
+          <input type="date" class="finput" id="te-agendada">
+        </div>
+        <div class="fgrp">
+          <div class="flbl">⏰ Data Limite</div>
+          <input type="date" class="finput" id="te-limite">
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-sm btn-sec" onclick="closeTaskModal()">Cancelar</button>
+      <button class="btn-sm btn-pri" onclick="saveTaskEdit()">Salvar</button>
+    </div>
   </div>
 </div>
 
@@ -595,12 +630,16 @@ function details(p) {
       <div class="det-sec">
         <div class="sec-title">📌 Tarefas</div>
         <div class="task-list">
-          ${p.tarefas.map(t=>`
-            <div class="task ${t.feito?'done':''}">
+          ${p.tarefas.map(t=>{
+            const overdue = t.dataLimite && !t.feito && new Date(t.dataLimite+'T23:59') < new Date();
+            const dates = (t.dataAgendada||t.dataLimite) ? `<div class="task-dates">${t.dataAgendada?`<span class="task-date">📅 ${fmtDate(t.dataAgendada)}</span>`:''} ${t.dataLimite?`<span class="task-date ${overdue?'overdue':''}">⏰ ${fmtDate(t.dataLimite)}${overdue?' · atrasada':''}</span>`:''}</div>` : '';
+            return `<div class="task ${t.feito?'done':''}">
               <div class="chk ${t.feito?'on':''}" onclick="toggleTask(${p.id},${t.id})"></div>
-              <span class="task-txt" onclick="toggleTask(${p.id},${t.id})">${t.texto}</span>
+              <div style="flex:1;min-width:0"><span class="task-txt" onclick="toggleTask(${p.id},${t.id})">${t.texto}</span>${dates}</div>
+              <button class="btn-edit" onclick="openTaskModal(${p.id},${t.id})" title="Editar">✏</button>
               <button class="del-task" onclick="delTask(${p.id},${t.id})" title="Remover">✕</button>
-            </div>`).join('')}
+            </div>`;
+          }).join('')}
         </div>
         <div class="add-task">
           <input type="text" class="add-input" id="nt-${p.id}" placeholder="Nova tarefa..." onkeydown="if(event.key==='Enter')addTask(${p.id})">
@@ -826,6 +865,43 @@ function toggleAcao(pid, gid, aid) {
   if (a) { a.feito=!a.feito; save(); updateCard(pid); }
 }
 
+let taskEditState = { pid: null, tid: null };
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function openTaskModal(pid, tid) {
+  const p = S.projects.find(p=>p.id===pid);
+  const t = p&&p.tarefas.find(t=>t.id===tid);
+  if (!t) return;
+  taskEditState = { pid, tid };
+  document.getElementById('te-texto').value = t.texto;
+  document.getElementById('te-agendada').value = t.dataAgendada || '';
+  document.getElementById('te-limite').value = t.dataLimite || '';
+  document.getElementById('task-overlay').classList.add('show');
+  setTimeout(()=>document.getElementById('te-texto').focus(), 50);
+}
+
+function closeTaskModal() {
+  document.getElementById('task-overlay').classList.remove('show');
+  taskEditState = { pid: null, tid: null };
+}
+
+function saveTaskEdit() {
+  const { pid, tid } = taskEditState;
+  const p = S.projects.find(p=>p.id===pid);
+  const t = p&&p.tarefas.find(t=>t.id===tid);
+  if (!t) return;
+  const texto = document.getElementById('te-texto').value.trim();
+  if (texto) t.texto = texto;
+  t.dataAgendada = document.getElementById('te-agendada').value || null;
+  t.dataLimite = document.getElementById('te-limite').value || null;
+  save(); updateCard(pid); closeTaskModal();
+}
+
 function openModal() { document.getElementById('overlay').classList.add('show'); document.getElementById('m-name').focus(); }
 function closeModal() { document.getElementById('overlay').classList.remove('show'); document.getElementById('m-name').value=''; }
 
@@ -848,7 +924,23 @@ function addProject() {
 }
 
 document.getElementById('overlay').addEventListener('click', e=>{ if(e.target===e.currentTarget)closeModal(); });
-document.addEventListener('keydown', e=>{ if(e.key==='Escape')closeModal(); });
+document.getElementById('task-overlay').addEventListener('click', e=>{ if(e.target===e.currentTarget)closeTaskModal(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeModal(); closeTaskModal(); } });
+
+function exportData() {
+  const date = new Date().toISOString().slice(0,10);
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    totalProjects: S.projects.length,
+    projects: S.projects
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `projetos_${date}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 
 if (!CONFIGURED) { load(); render(); }
 // Se configurado, o onAuthStateChanged cuida da inicialização
