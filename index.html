@@ -116,6 +116,23 @@
     .task-date { font-size: 10px; color: var(--muted); }
     .task-date.overdue { color: var(--danger); }
     .add-task { display: flex; gap: 6px; margin-top: 8px; }
+
+    /* TASK VIEW */
+    .tasks-nav { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }
+    .tasks-tab { padding: 6px 14px; border-radius: 8px; font-size: 12px; cursor: pointer; border: none; background: var(--surface2); color: var(--muted); transition: all .15s; display: flex; align-items: center; gap: 5px; }
+    .tasks-tab:hover { color: var(--text); }
+    .tasks-tab.active { background: var(--accent); color: #fff; }
+    .tasks-count { min-width: 17px; height: 17px; padding: 0 4px; border-radius: 4px; font-size: 10px; font-weight: 700; background: rgba(255,255,255,.18); display: inline-flex; align-items: center; justify-content: center; }
+    .task-view-list { display: flex; flex-direction: column; gap: 6px; }
+    .task-view-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; transition: border-color .15s; }
+    .task-view-item:hover { border-color: rgba(124,109,255,.3); }
+    .task-view-item .btn-edit { opacity: 0; }
+    .task-view-item:hover .btn-edit { opacity: 1; }
+    .task-proj-bar { width: 3px; min-height: 28px; border-radius: 2px; flex-shrink: 0; align-self: stretch; }
+    .task-proj-name { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+    .task-view-txt { font-size: 13px; color: var(--text); cursor: pointer; user-select: none; }
+    .task-view-item.done .task-view-txt { text-decoration: line-through; color: var(--muted); }
+    .task-empty { text-align: center; padding: 48px 20px; color: var(--muted); font-size: 14px; }
     .add-input { flex: 1; padding: 7px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 12px; outline: none; }
     .add-input:focus { border-color: var(--accent); }
     .add-input::placeholder { color: var(--muted); }
@@ -271,6 +288,7 @@
     <button class="tab active" onclick="setView('all')">Todos os Projetos</button>
     <button class="tab" onclick="setView('focus')">Foco (Top 3)</button>
     <button class="tab" onclick="setView('category')">Por Categoria</button>
+    <button class="tab" onclick="setView('tasks')">Tarefas</button>
   </div>
   <div style="display:flex;gap:8px">
     <button class="btn-sm btn-sec" onclick="exportData()" title="Exportar todos os projetos como JSON">⬇ Exportar</button>
@@ -537,9 +555,10 @@ function render() {
   const el = document.getElementById('main');
   if (S.view==='all') el.innerHTML = renderAll();
   else if (S.view==='focus') el.innerHTML = renderFocus();
+  else if (S.view==='tasks') el.innerHTML = renderTasks();
   else el.innerHTML = renderCat();
   document.querySelectorAll('.tab').forEach((t,i)=>{
-    t.classList.toggle('active', [S.view==='all',S.view==='focus',S.view==='category'][i]);
+    t.classList.toggle('active', [S.view==='all',S.view==='focus',S.view==='category',S.view==='tasks'][i]);
   });
 }
 
@@ -567,6 +586,80 @@ function renderCat() {
     const pot = cp.reduce((s,p)=>s+forecast(p),0);
     return `<div class="cat-section"><div class="cat-hdr"><span style="font-size:17px">${icons[cat]||'📁'}</span><div class="cat-title">${cat}</div><div class="cat-count">${cp.length}</div>${pot?`<span class="tag t-Ativo" style="margin-left:auto">${brl(pot)} potencial</span>`:''}</div><div class="grid">${cp.map(p=>card(p)).join('')}</div></div>`;
   }).join('');
+}
+
+function groupedTasks() {
+  const todayDate = new Date(); todayDate.setHours(0,0,0,0);
+  const todayStr = todayDate.toISOString().slice(0,10);
+  const dayMs = 86400000;
+  const dow = todayDate.getDay();
+  const weekStart = new Date(todayDate.getTime() - (dow===0?6:dow-1)*dayMs);
+  const weekEnd = new Date(weekStart.getTime() + 6*dayMs);
+  const monthEnd = new Date(todayDate.getFullYear(), todayDate.getMonth()+1, 0);
+
+  const groups = { today:[], week:[], month:[], later:[], unscheduled:[] };
+  S.projects.forEach(p => {
+    p.tarefas.forEach(t => {
+      const dateStr = t.dataLimite || t.dataAgendada;
+      const task = { ...t, project: p };
+      if (!dateStr) { groups.unscheduled.push(task); return; }
+      const d = new Date(dateStr+'T00:00');
+      if (d <= todayDate) { groups.today.push(task); return; }
+      if (d <= weekEnd)   { groups.week.push(task); return; }
+      if (d <= monthEnd)  { groups.month.push(task); return; }
+      groups.later.push(task);
+    });
+  });
+  return groups;
+}
+
+function renderTasks() {
+  if (!S.taskView) S.taskView = 'today';
+  const groups = groupedTasks();
+  const tabs = [
+    { key:'today',       label:'Hoje',        icon:'🔥' },
+    { key:'week',        label:'Esta semana',  icon:'📅' },
+    { key:'month',       label:'Este mês',     icon:'🗓' },
+    { key:'later',       label:'Depois',       icon:'⏭' },
+    { key:'unscheduled', label:'Sem data',     icon:'📋' },
+  ];
+  const sv = S.taskView;
+  const subTabs = tabs.map(t => {
+    const count = groups[t.key].length;
+    return `<button class="tasks-tab ${t.key===sv?'active':''}" onclick="setTaskView('${t.key}')">
+      ${t.icon} ${t.label}${count?`<span class="tasks-count">${count}</span>`:''}
+    </button>`;
+  }).join('');
+
+  const items = groups[sv];
+  const list = items.length
+    ? items.map(t => {
+        const overdue = t.dataLimite && !t.feito && new Date(t.dataLimite+'T23:59') < new Date();
+        const dates = (t.dataAgendada||t.dataLimite)
+          ? `<div class="task-dates">${t.dataAgendada?`<span class="task-date">📅 ${fmtDate(t.dataAgendada)}</span>`:''} ${t.dataLimite?`<span class="task-date ${overdue?'overdue':''}">⏰ ${fmtDate(t.dataLimite)}${overdue?' · atrasada':''}</span>`:''}</div>`
+          : '';
+        return `<div class="task-view-item ${t.feito?'done':''}">
+          <div class="task-proj-bar" style="background:${t.project.cor}"></div>
+          <div class="chk ${t.feito?'on':''}" onclick="toggleTaskGlobal(${t.project.id},${t.id})"></div>
+          <div style="flex:1;min-width:0">
+            <div class="task-proj-name">${t.project.name}</div>
+            <span class="task-view-txt" onclick="toggleTaskGlobal(${t.project.id},${t.id})">${t.texto}</span>
+            ${dates}
+          </div>
+          <button class="btn-edit" onclick="openTaskModal(${t.project.id},${t.id})" title="Editar">✏</button>
+        </div>`;
+      }).join('')
+    : `<div class="task-empty">✓ Nenhuma tarefa aqui</div>`;
+
+  return `<div class="tasks-nav">${subTabs}</div><div class="task-view-list">${list}</div>`;
+}
+
+function setTaskView(v) { S.taskView = v; render(); }
+
+function toggleTaskGlobal(pid, tid) {
+  const p = S.projects.find(p=>p.id===pid);
+  const t = p&&p.tarefas.find(t=>t.id===tid);
+  if (t) { t.feito=!t.feito; save(); render(); }
 }
 
 function card(p) {
@@ -899,7 +992,9 @@ function saveTaskEdit() {
   if (texto) t.texto = texto;
   t.dataAgendada = document.getElementById('te-agendada').value || null;
   t.dataLimite = document.getElementById('te-limite').value || null;
-  save(); updateCard(pid); closeTaskModal();
+  save();
+  if (S.view === 'tasks') render(); else updateCard(pid);
+  closeTaskModal();
 }
 
 function openModal() { document.getElementById('overlay').classList.add('show'); document.getElementById('m-name').focus(); }
