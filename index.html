@@ -610,6 +610,9 @@ function runEntrance() {
   setTimeout(() => animateStats(stats()), COUNTUP_DELAY);
   // libera os updates normais só quando a contagem termina
   setTimeout(() => { numbersReady = true; }, COUNTUP_DELAY + COUNTUP_DUR + 80);
+  // remove a classe quando a entrada termina: senão a animação (fill:both) deixa
+  // .main como stacking context/containing block e quebra o overlay fixed do card
+  setTimeout(() => document.body.classList.remove('enter'), 1000);
 }
 
 function render() {
@@ -946,6 +949,11 @@ function toggleExpand(id) {
   const opening = S.expandedId !== id;
   let fromRect = null;
   if (opening) {
+    // qualquer transform em um ancestral (.main) tornaria o card fixed posicionado
+    // relativo a ela e atrás do scrim — limpa entrada e animações de aba antes de abrir
+    document.body.classList.remove('enter');
+    const main = document.getElementById('main');
+    if (main && main.getAnimations) main.getAnimations().forEach(a => a.cancel());
     const cur = document.getElementById(`card-${id}`);
     if (cur) fromRect = cur.getBoundingClientRect();
   }
