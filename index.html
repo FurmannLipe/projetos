@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gestão de Projetos</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237c6dff'/%3E%3Cstop offset='1' stop-color='%2300b4d8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23fff' stroke-width='2.2'/%3E%3Ccircle cx='16' cy='16' r='4.6' fill='none' stroke='%23fff' stroke-width='2.2'/%3E%3Ccircle cx='16' cy='16' r='1.7' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0d0f18">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Projetos">
   <style>
     :root {
       --bg: #0d0f18; --surface: #151720; --surface2: #1c1f30;
@@ -12,7 +19,7 @@
       --success: #4ecca3; --warning: #f4a261; --danger: #e05c6a; --info: #00b4d8;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
 
     /* HEADER */
     .header { background: linear-gradient(135deg,#1a1d30,#151720); border-bottom: 1px solid var(--border); padding: 24px 32px; }
@@ -31,10 +38,11 @@
 
     /* NAV */
     .nav { padding: 14px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); background: var(--surface); }
-    .tabs { display: flex; gap: 4px; }
-    .tab { padding: 7px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; border: none; background: transparent; color: var(--muted); transition: all .15s; }
-    .tab:hover { background: var(--surface2); color: var(--text); }
-    .tab.active { background: var(--accent); color: #fff; }
+    .tabs { display: flex; gap: 4px; position: relative; }
+    .tab-indicator { position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: var(--accent); border-radius: 8px; z-index: 0; transition: left .28s cubic-bezier(.4,.85,.3,1), width .28s cubic-bezier(.4,.85,.3,1); }
+    .tab { position: relative; z-index: 1; padding: 7px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; border: none; background: transparent; color: var(--muted); transition: color .15s; }
+    .tab:not(.active):hover { background: var(--surface2); color: var(--text); }
+    .tab.active { color: #fff; }
     .btn-add { padding: 7px 16px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; transition: background .15s; }
     .btn-add:hover { background: var(--accent2); }
 
@@ -46,7 +54,13 @@
     /* CARD */
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; transition: border-color .2s, transform .15s; }
     .card:hover { border-color: rgba(124,109,255,.45); transform: translateY(-1px); }
-    .card.open { border-color: var(--accent); }
+    .card.open { border-color: var(--accent); position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(1280px,94vw); max-height: 90vh; overflow-y: auto; z-index: 600; box-shadow: 0 24px 80px rgba(0,0,0,.65); animation: none; transition: none; }
+    .card.open:hover { transform: translate(-50%,-50%); }
+    .card.open .details { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px 26px; align-items: start; }
+    .card.open .details > .status-row, .card.open .details > .danger-zone { grid-column: 1 / -1; }
+    .card.open .details > .det-sec { margin-bottom: 0; }
+    .card-scrim { position: fixed; inset: 0; background: rgba(5,6,12,.66); backdrop-filter: blur(3px); z-index: 590; opacity: 0; pointer-events: none; transition: opacity .15s; }
+    body.card-open .card-scrim { opacity: 1; pointer-events: auto; }
     .color-bar { height: 3px; border-radius: 13px 13px 0 0; }
     .card-head { padding: 14px 16px; cursor: pointer; }
     .card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
@@ -133,6 +147,14 @@
     .task-view-txt { font-size: 13px; color: var(--text); cursor: pointer; user-select: none; }
     .task-view-item.done .task-view-txt { text-decoration: line-through; color: var(--muted); }
     .task-empty { text-align: center; padding: 48px 20px; color: var(--muted); font-size: 14px; }
+    .task-none { font-size: 12px; color: var(--muted); padding: 4px 2px; }
+    .done-section { margin-top: 8px; }
+    .done-toggle { width: 100%; display: flex; align-items: center; gap: 7px; padding: 7px 10px; background: transparent; border: 1px dashed var(--border); border-radius: 7px; color: var(--muted); font-size: 11px; cursor: pointer; transition: all .12s; }
+    .done-toggle:hover { background: var(--surface2); color: var(--text); }
+    .done-caret { display: inline-block; transition: transform .12s; font-size: 9px; }
+    .done-toggle.open .done-caret { transform: rotate(90deg); }
+    .done-count { min-width: 16px; height: 16px; padding: 0 5px; border-radius: 4px; font-size: 10px; font-weight: 700; background: var(--surface2); color: var(--muted); display: inline-flex; align-items: center; justify-content: center; }
+    .done-list { margin-top: 6px; }
     .add-input { flex: 1; padding: 7px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 12px; outline: none; }
     .add-input:focus { border-color: var(--accent); }
     .add-input::placeholder { color: var(--muted); }
@@ -238,12 +260,15 @@
     /* MISC */
     ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: var(--bg); }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-    @keyframes fadeUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
-    .card { animation: fadeUp .18s ease; }
+    @keyframes fadeInUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:none} }
+    body.boot .header, body.boot .nav, body.boot .main { opacity: 0; }
+    body.enter .header { animation: fadeInUp .55s ease both; }
+    body.enter .nav   { animation: fadeInUp .55s ease .12s both; }
+    body.enter .main  { animation: fadeInUp .55s ease .24s both; }
     @media(max-width:720px){.stats{grid-template-columns:repeat(2,1fr)}.main{padding:16px}.grid{grid-template-columns:1fr}.rev-grid{grid-template-columns:1fr}}
   </style>
 </head>
-<body>
+<body class="boot">
 
 <header class="header">
   <div class="header-top">
@@ -285,6 +310,7 @@
 
 <nav class="nav">
   <div class="tabs">
+    <span class="tab-indicator" id="tab-indicator"></span>
     <button class="tab active" onclick="setView('all')">Todos os Projetos</button>
     <button class="tab" onclick="setView('focus')">Foco (Top 3)</button>
     <button class="tab" onclick="setView('category')">Por Categoria</button>
@@ -296,6 +322,7 @@
   </div>
 </nav>
 
+<div class="card-scrim" onclick="closeCard()"></div>
 <main class="main" id="main"></main>
 
 <div id="auth-screen" class="auth-screen" style="display:none">
@@ -487,7 +514,7 @@ function saveFirestoreDebounced() {
 const KEY = 'projetos_v1';
 const COLORS = ['#7c6dff','#00b4d8','#4ecca3','#f4a261','#e05c6a','#9b72cf','#e63946','#2ec4b6','#f77f00','#06d6a0'];
 
-let S = { projects: [], expandedId: null, view: 'all' };
+let S = { projects: [], expandedId: null, view: 'all', cardDoneOpen: {}, tasksDoneOpen: {} };
 
 const DEFAULTS = [
   { id:1, name:"Escritório de Arquitetura", category:"Serviços", priority:1, status:"Ativo", esforco:"Alto", receitaAtual:0, metaMensal:0, confianca:50, prazo:6, cor:COLORS[0], notas:"",
@@ -538,8 +565,8 @@ function stats() {
   };
 }
 
-function updateStats() {
-  const s = stats();
+let booted = false, numbersReady = false;
+function setStats(s) {
   document.getElementById('s-ativos').textContent = s.ativos;
   document.getElementById('s-total').textContent = s.total;
   document.getElementById('s-atual').textContent = brl(s.atual);
@@ -547,7 +574,42 @@ function updateStats() {
   document.getElementById('s-pct').textContent = s.pct+'%';
   document.getElementById('s-done').textContent = s.done;
   document.getElementById('s-ttasks').textContent = s.ttasks;
+}
+function tweenNum(el, to, fmt, dur) {
+  if (!el) return;
+  const start = performance.now();
+  (function frame(now) {
+    const t = Math.min(1, (now-start)/dur);
+    const e = 1 - Math.pow(1-t, 3);
+    el.textContent = fmt(Math.round(to*e));
+    if (t < 1) requestAnimationFrame(frame);
+    else el.textContent = fmt(to);
+  })(start);
+}
+function animateStats(s) {
+  const D = COUNTUP_DUR;
+  tweenNum(document.getElementById('s-ativos'),  s.ativos, v=>v,        D);
+  tweenNum(document.getElementById('s-total'),   s.total,  v=>v,        D);
+  tweenNum(document.getElementById('s-atual'),   s.atual,  v=>brl(v),   D);
+  tweenNum(document.getElementById('s-pot'),     s.pot,    v=>brl(v),   D);
+  tweenNum(document.getElementById('s-pct'),     s.pct,    v=>v+'%',    D);
+  tweenNum(document.getElementById('s-done'),    s.done,   v=>v,        D);
+  tweenNum(document.getElementById('s-ttasks'),  s.ttasks, v=>v,        D);
+}
+function updateStats() {
+  const s = stats();
+  // mantém zeros até o count-up terminar; evita que re-renders (ex.: sync do Firestore) pintem os valores finais antes da animação
+  if (numbersReady) setStats(s);
   document.getElementById('current-date').textContent = new Date().toLocaleDateString('pt-BR',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+}
+const COUNTUP_DELAY = 700, COUNTUP_DUR = 1100;
+function runEntrance() {
+  document.body.classList.remove('boot');
+  document.body.classList.add('enter');
+  // count-up dos números só depois do fade-in da seção de stats
+  setTimeout(() => animateStats(stats()), COUNTUP_DELAY);
+  // libera os updates normais só quando a contagem termina
+  setTimeout(() => { numbersReady = true; }, COUNTUP_DELAY + COUNTUP_DUR + 80);
 }
 
 function render() {
@@ -560,7 +622,23 @@ function render() {
   document.querySelectorAll('.tab').forEach((t,i)=>{
     t.classList.toggle('active', [S.view==='all',S.view==='focus',S.view==='category',S.view==='tasks'][i]);
   });
+  moveTabIndicator(!tabReady); tabReady = true;
+  if (!booted) { booted = true; runEntrance(); }
 }
+
+let tabReady = false;
+function moveTabIndicator(instant) {
+  const tabs = document.querySelector('.tabs');
+  const ind = document.getElementById('tab-indicator');
+  if (!tabs || !ind) return;
+  const active = tabs.querySelector('.tab.active');
+  if (!active) return;
+  if (instant) ind.style.transition = 'none';
+  ind.style.left = active.offsetLeft + 'px';
+  ind.style.width = active.offsetWidth + 'px';
+  if (instant) { void ind.offsetWidth; ind.style.transition = ''; }
+}
+window.addEventListener('resize', () => moveTabIndicator(true));
 
 function renderAll() {
   const ps = sorted();
@@ -613,6 +691,48 @@ function groupedTasks() {
   return groups;
 }
 
+function taskDatesHtml(t) {
+  const overdue = t.dataLimite && !t.feito && new Date(t.dataLimite+'T23:59') < new Date();
+  return (t.dataAgendada||t.dataLimite)
+    ? `<div class="task-dates">${t.dataAgendada?`<span class="task-date">📅 ${fmtDate(t.dataAgendada)}</span>`:''} ${t.dataLimite?`<span class="task-date ${overdue?'overdue':''}">⏰ ${fmtDate(t.dataLimite)}${overdue?' · atrasada':''}</span>`:''}</div>`
+    : '';
+}
+
+function taskRowCard(p, t) {
+  return `<div class="task ${t.feito?'done':''}">
+    <div class="chk ${t.feito?'on':''}" onclick="toggleTask(${p.id},${t.id})"></div>
+    <div style="flex:1;min-width:0"><span class="task-txt" onclick="toggleTask(${p.id},${t.id})">${t.texto}</span>${taskDatesHtml(t)}</div>
+    <button class="btn-edit" onclick="openTaskModal(${p.id},${t.id})" title="Editar">✏</button>
+    <button class="del-task" onclick="delTask(${p.id},${t.id})" title="Remover">✕</button>
+  </div>`;
+}
+
+function taskRowView(t) {
+  return `<div class="task-view-item ${t.feito?'done':''}">
+    <div class="task-proj-bar" style="background:${t.project.cor}"></div>
+    <div class="chk ${t.feito?'on':''}" onclick="toggleTaskGlobal(${t.project.id},${t.id})"></div>
+    <div style="flex:1;min-width:0">
+      <div class="task-proj-name">${t.project.name}</div>
+      <span class="task-view-txt" onclick="toggleTaskGlobal(${t.project.id},${t.id})">${t.texto}</span>
+      ${taskDatesHtml(t)}
+    </div>
+    <button class="btn-edit" onclick="openTaskModal(${t.project.id},${t.id})" title="Editar">✏</button>
+  </div>`;
+}
+
+function doneSection(doneRows, count, open, onclick) {
+  if (!count) return '';
+  return `<div class="done-section">
+    <button class="done-toggle ${open?'open':''}" onclick="${onclick}">
+      <span class="done-caret">▸</span> Concluídas <span class="done-count">${count}</span>
+    </button>
+    ${open ? `<div class="task-list done-list">${doneRows}</div>` : ''}
+  </div>`;
+}
+
+function toggleCardDone(pid) { S.cardDoneOpen[pid] = !S.cardDoneOpen[pid]; render(); }
+function toggleTasksDone(key) { S.tasksDoneOpen[key] = !S.tasksDoneOpen[key]; render(); }
+
 function renderTasks() {
   if (!S.taskView) S.taskView = 'today';
   const groups = groupedTasks();
@@ -632,26 +752,14 @@ function renderTasks() {
   }).join('');
 
   const items = groups[sv];
-  const list = items.length
-    ? items.map(t => {
-        const overdue = t.dataLimite && !t.feito && new Date(t.dataLimite+'T23:59') < new Date();
-        const dates = (t.dataAgendada||t.dataLimite)
-          ? `<div class="task-dates">${t.dataAgendada?`<span class="task-date">📅 ${fmtDate(t.dataAgendada)}</span>`:''} ${t.dataLimite?`<span class="task-date ${overdue?'overdue':''}">⏰ ${fmtDate(t.dataLimite)}${overdue?' · atrasada':''}</span>`:''}</div>`
-          : '';
-        return `<div class="task-view-item ${t.feito?'done':''}">
-          <div class="task-proj-bar" style="background:${t.project.cor}"></div>
-          <div class="chk ${t.feito?'on':''}" onclick="toggleTaskGlobal(${t.project.id},${t.id})"></div>
-          <div style="flex:1;min-width:0">
-            <div class="task-proj-name">${t.project.name}</div>
-            <span class="task-view-txt" onclick="toggleTaskGlobal(${t.project.id},${t.id})">${t.texto}</span>
-            ${dates}
-          </div>
-          <button class="btn-edit" onclick="openTaskModal(${t.project.id},${t.id})" title="Editar">✏</button>
-        </div>`;
-      }).join('')
-    : `<div class="task-empty">✓ Nenhuma tarefa aqui</div>`;
+  const active = items.filter(t=>!t.feito);
+  const done = items.filter(t=>t.feito);
+  const list = active.length
+    ? active.map(taskRowView).join('')
+    : (items.length ? `<div class="task-empty">✓ Tudo concluído aqui</div>` : `<div class="task-empty">✓ Nenhuma tarefa aqui</div>`);
+  const doneBlock = doneSection(done.map(taskRowView).join(''), done.length, !!S.tasksDoneOpen[sv], `toggleTasksDone('${sv}')`);
 
-  return `<div class="tasks-nav">${subTabs}</div><div class="task-view-list">${list}</div>`;
+  return `<div class="tasks-nav">${subTabs}</div><div class="task-view-list">${list}</div>${doneBlock}`;
 }
 
 function setTaskView(v) { S.taskView = v; render(); }
@@ -723,17 +831,9 @@ function details(p) {
       <div class="det-sec">
         <div class="sec-title">📌 Tarefas</div>
         <div class="task-list">
-          ${p.tarefas.map(t=>{
-            const overdue = t.dataLimite && !t.feito && new Date(t.dataLimite+'T23:59') < new Date();
-            const dates = (t.dataAgendada||t.dataLimite) ? `<div class="task-dates">${t.dataAgendada?`<span class="task-date">📅 ${fmtDate(t.dataAgendada)}</span>`:''} ${t.dataLimite?`<span class="task-date ${overdue?'overdue':''}">⏰ ${fmtDate(t.dataLimite)}${overdue?' · atrasada':''}</span>`:''}</div>` : '';
-            return `<div class="task ${t.feito?'done':''}">
-              <div class="chk ${t.feito?'on':''}" onclick="toggleTask(${p.id},${t.id})"></div>
-              <div style="flex:1;min-width:0"><span class="task-txt" onclick="toggleTask(${p.id},${t.id})">${t.texto}</span>${dates}</div>
-              <button class="btn-edit" onclick="openTaskModal(${p.id},${t.id})" title="Editar">✏</button>
-              <button class="del-task" onclick="delTask(${p.id},${t.id})" title="Remover">✕</button>
-            </div>`;
-          }).join('')}
+          ${(()=>{ const a=p.tarefas.filter(t=>!t.feito); return a.length ? a.map(t=>taskRowCard(p,t)).join('') : (p.tarefas.length?'':'<div class="task-none">Nenhuma tarefa ainda</div>'); })()}
         </div>
+        ${(()=>{ const d=p.tarefas.filter(t=>t.feito); return doneSection(d.map(t=>taskRowCard(p,t)).join(''), d.length, !!S.cardDoneOpen[p.id], `toggleCardDone(${p.id})`); })()}
         <div class="add-task">
           <input type="text" class="add-input" id="nt-${p.id}" placeholder="Nova tarefa..." onkeydown="if(event.key==='Enter')addTask(${p.id})">
           <button class="btn-sm btn-pri" onclick="addTask(${p.id})">+</button>
@@ -843,11 +943,53 @@ function updateCard(id) {
 
 function toggleExpand(id) {
   const prev = S.expandedId;
-  S.expandedId = S.expandedId===id ? null : id;
+  const opening = S.expandedId !== id;
+  let fromRect = null;
+  if (opening) {
+    const cur = document.getElementById(`card-${id}`);
+    if (cur) fromRect = cur.getBoundingClientRect();
+  }
+  S.expandedId = opening ? id : null;
+  document.body.classList.toggle('card-open', S.expandedId!=null);
   if (prev && prev !== id) updateCard(prev);
   updateCard(id);
+  if (opening) flipOpenCard(id, fromRect);
 }
-function setView(v) { S.view=v; render(); }
+
+function flipOpenCard(id, from) {
+  const el = document.getElementById(`card-${id}`);
+  if (!el || !from || !el.animate) return;
+  const last = el.getBoundingClientRect();
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const fromTx = from.left - vw/2, fromTy = from.top - vh/2;
+  const sx = from.width / last.width, sy = from.height / last.height;
+  const toTx = -last.width/2, toTy = -last.height/2;
+  el.animate([
+    { transformOrigin:'top left', transform:`translate(${fromTx}px,${fromTy}px) scale(${sx},${sy})`, opacity: .35 },
+    { transformOrigin:'top left', transform:`translate(${toTx}px,${toTy}px) scale(1,1)`, opacity: 1 }
+  ], { duration: 240, easing: 'cubic-bezier(.2,.75,.3,1)' });
+}
+function closeCard() {
+  if (S.expandedId==null) return;
+  const id = S.expandedId;
+  S.expandedId = null;
+  document.body.classList.remove('card-open');
+  updateCard(id);
+}
+document.addEventListener('keydown', e => { if (e.key==='Escape') closeCard(); });
+const VIEW_ORDER = ['all','focus','category','tasks'];
+function setView(v) {
+  if (v === S.view) return;
+  const dir = VIEW_ORDER.indexOf(v) > VIEW_ORDER.indexOf(S.view) ? 1 : -1;
+  closeCard();
+  S.view = v;
+  render();
+  const el = document.getElementById('main');
+  if (el && el.animate) el.animate([
+    { opacity: 0, transform: `translateX(${dir*28}px)` },
+    { opacity: 1, transform: 'translateX(0)' }
+  ], { duration: 280, easing: 'cubic-bezier(.2,.7,.3,1)' });
+}
 
 function move(id, dir) {
   const ps = sorted(), idx = ps.findIndex(p=>p.id===id), nIdx = idx+dir;
