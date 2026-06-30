@@ -681,9 +681,10 @@ function groupedTasks() {
   const groups = { today:[], week:[], month:[], later:[], unscheduled:[] };
   S.projects.forEach(p => {
     p.tarefas.forEach(t => {
-      const dateStr = t.dataLimite || t.dataAgendada;
+      const dates = [t.dataAgendada, t.dataLimite].filter(Boolean);
       const task = { ...t, project: p };
-      if (!dateStr) { groups.unscheduled.push(task); return; }
+      if (!dates.length) { groups.unscheduled.push(task); return; }
+      const dateStr = dates.sort()[0];
       const d = new Date(dateStr+'T00:00');
       if (d <= todayDate) { groups.today.push(task); return; }
       if (d <= weekEnd)   { groups.week.push(task); return; }
@@ -748,7 +749,7 @@ function renderTasks() {
   ];
   const sv = S.taskView;
   const subTabs = tabs.map(t => {
-    const count = groups[t.key].length;
+    const count = groups[t.key].filter(x=>!x.feito).length;
     return `<button class="tasks-tab ${t.key===sv?'active':''}" onclick="setTaskView('${t.key}')">
       ${t.icon} ${t.label}${count?`<span class="tasks-count">${count}</span>`:''}
     </button>`;
