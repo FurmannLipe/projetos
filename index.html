@@ -233,6 +233,31 @@
     .btn-gargalo { padding: 7px 12px; border-radius: 7px; border: 1px solid rgba(224,92,106,.3); background: rgba(224,92,106,.1); color: var(--danger); font-size: 12px; cursor: pointer; white-space: nowrap; transition: all .12s; }
     .btn-gargalo:hover { background: rgba(224,92,106,.2); }
 
+    /* OBJETIVOS */
+    .goals-banner { flex-wrap: wrap; }
+    .birth-field { margin-left: auto; display: flex; flex-direction: column; gap: 4px; }
+    .birth-field .finput { width: auto; padding: 6px 10px; font-size: 12px; color-scheme: dark; }
+    .goal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; transition: border-color .2s; }
+    .goal:hover { border-color: rgba(124,109,255,.45); }
+    .goal.won { border-color: rgba(78,204,163,.35); }
+    .goal.open { grid-column: 1 / -1; border-color: var(--accent); }
+    .goal.open .details { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px 26px; align-items: start; }
+    .goal.open .details > .det-sec { margin-bottom: 0; }
+    .goal.open .details > .danger-zone { grid-column: 1 / -1; }
+    .goal-head { padding: 14px 16px; cursor: pointer; }
+    .goal-top { display: flex; align-items: flex-start; gap: 12px; }
+    .goal-name { font-size: 15px; font-weight: 600; line-height: 1.35; }
+    .goal-left { text-align: right; flex-shrink: 0; }
+    .goal-left-val { font-size: 18px; font-weight: 700; white-space: nowrap; color: var(--muted); }
+    .goal-left-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin-top: 2px; }
+    .goal-left.ok .goal-left-val { color: var(--info); }
+    .goal-left.warn .goal-left-val { color: var(--warning); }
+    .goal-left.late .goal-left-val { color: var(--danger); }
+    .goal-left.won .goal-left-val { color: var(--success); }
+    .goal-hint { padding: 0 16px 12px; font-size: 11px; color: var(--muted); }
+    .prog-fill.money { background: linear-gradient(90deg,var(--success),var(--info)); }
+    .goal .danger-zone { gap: 8px; }
+
     /* MODAL */
     .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: center; justify-content: center; z-index: 700; }
     .overlay.show { display: flex; }
@@ -265,7 +290,7 @@
     body.enter .header { animation: fadeInUp .55s ease both; }
     body.enter .nav   { animation: fadeInUp .55s ease .12s both; }
     body.enter .main  { animation: fadeInUp .55s ease .24s both; }
-    @media(max-width:720px){.stats{grid-template-columns:repeat(2,1fr)}.main{padding:16px}.grid{grid-template-columns:1fr}.rev-grid{grid-template-columns:1fr}}
+    @media(max-width:720px){.stats{grid-template-columns:repeat(2,1fr)}.main{padding:16px}.grid{grid-template-columns:1fr}.rev-grid{grid-template-columns:1fr}.nav{flex-wrap:wrap;gap:10px}.tabs{overflow-x:auto;max-width:100%}.birth-field{margin-left:0}}
   </style>
 </head>
 <body class="boot">
@@ -315,10 +340,11 @@
     <button class="tab" onclick="setView('focus')">Foco (Top 3)</button>
     <button class="tab" onclick="setView('category')">Por Categoria</button>
     <button class="tab" onclick="setView('tasks')">Tarefas</button>
+    <button class="tab" onclick="setView('goals')">Objetivos</button>
   </div>
   <div style="display:flex;gap:8px">
-    <button class="btn-sm btn-sec" onclick="exportData()" title="Exportar todos os projetos como JSON">⬇ Exportar</button>
-    <button class="btn-add" onclick="openModal()">+ Novo Projeto</button>
+    <button class="btn-sm btn-sec" onclick="exportData()" title="Exportar projetos e objetivos como JSON">⬇ Exportar</button>
+    <button class="btn-add" id="btn-add" onclick="openModal()">+ Novo Projeto</button>
   </div>
 </nav>
 
@@ -360,6 +386,35 @@
     <div class="modal-foot">
       <button class="btn-sm btn-sec" onclick="closeTaskModal()">Cancelar</button>
       <button class="btn-sm btn-pri" onclick="saveTaskEdit()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="goal-overlay">
+  <div class="modal">
+    <h2>Novo Objetivo</h2>
+    <div class="modal-body">
+      <div class="fgrp">
+        <div class="flbl">Objetivo</div>
+        <input type="text" class="finput" id="g-titulo" placeholder="Ex: Comprar uma casa">
+      </div>
+      <div class="two-col">
+        <div class="fgrp">
+          <div class="flbl">Até os (idade)</div>
+          <input type="number" class="finput" id="g-idade" min="1" placeholder="Ex: 30">
+        </div>
+        <div class="fgrp">
+          <div class="flbl">Valor necessário (opcional)</div>
+          <div class="prefix-wrap">
+            <span class="prefix">R$</span>
+            <input type="number" class="prefix-in" id="g-valor" placeholder="0">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-sm btn-sec" onclick="closeGoalModal()">Cancelar</button>
+      <button class="btn-sm btn-pri" onclick="addGoal()">Criar</button>
     </div>
   </div>
 </div>
@@ -459,13 +514,16 @@ async function initFromFirestore() {
   try {
     const ref = fbDb.collection('users').doc(currentUser.uid);
     const doc = await ref.get();
-    if (doc.exists && doc.data().projects) {
-      S.projects = doc.data().projects;
+    const data = doc.exists ? doc.data() : {};
+    if (data.projects) {
+      S.projects = data.projects;
     } else {
       // Novo usuário: começa do zero, nunca carrega dados de outro usuário
       S.projects = DEFAULTS.map(p => ({...p, tarefas: p.tarefas.map(t=>({...t})), gargalos: []}));
-      await saveToFirestore();
     }
+    S.objetivos = data.objetivos || seedGoals();
+    S.nascimento = data.nascimento || null;
+    if (!data.projects || !data.objetivos) await saveToFirestore();
     S.projects.forEach(p => { if (!p.gargalos) p.gargalos = []; });
     localStorage.setItem(localKey(), JSON.stringify(S));
     setSyncDot('ok');
@@ -486,6 +544,8 @@ function setupListener(ref) {
     if (!data.projects) return;
     S.projects = data.projects;
     S.projects.forEach(p => { if (!p.gargalos) p.gargalos = []; });
+    if (data.objetivos) S.objetivos = data.objetivos;
+    if ('nascimento' in data) S.nascimento = data.nascimento;
     localStorage.setItem(localKey(), JSON.stringify(S));
     setSyncDot('ok');
     render();
@@ -499,6 +559,8 @@ async function saveToFirestore() {
   try {
     await fbDb.collection('users').doc(currentUser.uid).set({
       projects: S.projects,
+      objetivos: S.objetivos,
+      nascimento: S.nascimento || null,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     setSyncDot('ok');
@@ -514,7 +576,16 @@ function saveFirestoreDebounced() {
 const KEY = 'projetos_v1';
 const COLORS = ['#7c6dff','#00b4d8','#4ecca3','#f4a261','#e05c6a','#9b72cf','#e63946','#2ec4b6','#f77f00','#06d6a0'];
 
-let S = { projects: [], expandedId: null, view: 'all', cardDoneOpen: {}, tasksDoneOpen: {} };
+let S = { projects: [], objetivos: [], nascimento: null, expandedId: null, goalOpen: null, view: 'all', cardDoneOpen: {}, tasksDoneOpen: {} };
+
+const GOAL_DEFAULTS = [
+  { id:1, titulo:"Comprar uma casa para mim e minha esposa", idadeAlvo:30, cor:COLORS[0] },
+  { id:2, titulo:"Comprar um carro bacana para poder viajar", idadeAlvo:24, cor:COLORS[1] },
+  { id:3, titulo:"Fazer parte do clube Santa Monica", idadeAlvo:24, cor:COLORS[2] }
+];
+function seedGoals() {
+  return GOAL_DEFAULTS.map(o => ({ ...o, valorAlvo:0, valorGuardado:0, marcos:[], notas:"", concluido:false }));
+}
 
 const DEFAULTS = [
   { id:1, name:"Escritório de Arquitetura", category:"Serviços", priority:1, status:"Ativo", esforco:"Alto", receitaAtual:0, metaMensal:0, confianca:50, prazo:6, cor:COLORS[0], notas:"",
@@ -537,8 +608,14 @@ const DEFAULTS = [
 
 function localKey() { return currentUser ? KEY + '_' + currentUser.uid : KEY; }
 function loadLocal() {
-  try { const d = localStorage.getItem(localKey()); if (d) { const p = JSON.parse(d); S.projects = p.projects || DEFAULTS; } else S.projects = DEFAULTS; }
-  catch(e) { S.projects = DEFAULTS; }
+  try {
+    const d = localStorage.getItem(localKey());
+    const p = d ? JSON.parse(d) : {};
+    S.projects = p.projects || DEFAULTS;
+    S.objetivos = p.objetivos || seedGoals();
+    S.nascimento = p.nascimento || null;
+  }
+  catch(e) { S.projects = DEFAULTS; S.objetivos = seedGoals(); }
   S.projects.forEach(p => { if (!p.gargalos) p.gargalos = []; });
 }
 function load() { loadLocal(); }
@@ -621,10 +698,14 @@ function render() {
   if (S.view==='all') el.innerHTML = renderAll();
   else if (S.view==='focus') el.innerHTML = renderFocus();
   else if (S.view==='tasks') el.innerHTML = renderTasks();
+  else if (S.view==='goals') el.innerHTML = renderGoals();
   else el.innerHTML = renderCat();
   document.querySelectorAll('.tab').forEach((t,i)=>{
-    t.classList.toggle('active', [S.view==='all',S.view==='focus',S.view==='category',S.view==='tasks'][i]);
+    t.classList.toggle('active', VIEW_ORDER[i]===S.view);
   });
+  const btnAdd = document.getElementById('btn-add');
+  if (S.view==='goals') { btnAdd.textContent = '+ Novo Objetivo'; btnAdd.onclick = openGoalModal; }
+  else { btnAdd.textContent = '+ Novo Projeto'; btnAdd.onclick = openModal; }
   moveTabIndicator(!tabReady); tabReady = true;
   if (!booted) { booted = true; runEntrance(); }
 }
@@ -772,6 +853,218 @@ function toggleTaskGlobal(pid, tid) {
   const p = S.projects.find(p=>p.id===pid);
   const t = p&&p.tarefas.find(t=>t.id===tid);
   if (t) { t.feito=!t.feito; save(); render(); }
+}
+
+// ─── Objetivos ─────────────────────────────────────────────────────────────
+function parseIso(iso) { const [y,m,d] = iso.split('-').map(Number); return { y, m, d }; }
+function ageOn(birthIso, date) {
+  const b = parseIso(birthIso);
+  let age = date.getFullYear() - b.y;
+  if (date.getMonth()+1 < b.m || (date.getMonth()+1 === b.m && date.getDate() < b.d)) age--;
+  return age;
+}
+// prazo = dia do aniversário em que a pessoa completa a idade alvo
+function goalDeadline(o) {
+  if (!S.nascimento || !o.idadeAlvo) return null;
+  const b = parseIso(S.nascimento);
+  return new Date(b.y + o.idadeAlvo, b.m-1, b.d);
+}
+function monthsBetween(a, b) {
+  return (b.getFullYear()-a.getFullYear())*12 + (b.getMonth()-a.getMonth()) - (b.getDate() < a.getDate() ? 1 : 0);
+}
+function fmtLeft(m) {
+  const y = Math.floor(m/12), r = m % 12;
+  if (!y && !r) return '< 1m';
+  return [y ? `${y}a` : '', r ? `${r}m` : ''].filter(Boolean).join(' ');
+}
+function goalStatus(o, dl) {
+  if (o.concluido) return { cls:'won', big:'✓', small:'conquistado' };
+  if (!dl) return { cls:'', big:'?', small:'informe o nascimento' };
+  const today = new Date(); today.setHours(0,0,0,0);
+  if (dl < today) return { cls:'late', big:'Vencido', small:'prazo passou' };
+  const m = monthsBetween(today, dl);
+  return { cls: m < 12 ? 'warn' : 'ok', big: fmtLeft(m), small:'restantes' };
+}
+function sortedGoals() {
+  return [...S.objetivos].sort((a,b) => (a.concluido - b.concluido) || (a.idadeAlvo - b.idadeAlvo));
+}
+
+function renderGoals() {
+  const os = sortedGoals();
+  const age = S.nascimento ? ageOn(S.nascimento, new Date()) : null;
+  const won = os.filter(o=>o.concluido).length;
+  const info = age != null
+    ? `Você tem ${age} anos. ${won} de ${os.length} objetivos conquistados.`
+    : 'Informe sua data de nascimento para calcular o prazo de cada objetivo.';
+  return `
+    <div class="focus-banner goals-banner">
+      <div style="font-size:26px">🏔</div>
+      <div><h3>Objetivos de vida</h3><p>${info}</p></div>
+      <label class="birth-field"><span class="flbl">Data de nascimento</span>
+        <input type="date" class="finput" value="${S.nascimento||''}" onchange="setNascimento(this.value)">
+      </label>
+    </div>
+    ${os.length ? `<div class="grid">${os.map(goalCard).join('')}</div>` : `<div class="task-empty">Nenhum objetivo ainda. Crie o primeiro em "+ Novo Objetivo".</div>`}`;
+}
+
+function goalCard(o) {
+  const open = S.goalOpen===o.id;
+  const dl = goalDeadline(o);
+  const st = goalStatus(o, dl);
+  const mdone = o.marcos.filter(m=>m.feito).length, mtot = o.marcos.length;
+  const mpct = mtot ? Math.round(mdone/mtot*100) : 0;
+  const vpct = o.valorAlvo ? Math.min(100, Math.round((o.valorGuardado||0)/o.valorAlvo*100)) : 0;
+  return `
+    <div class="goal ${open?'open':''} ${o.concluido?'won':''}" id="goal-${o.id}">
+      <div class="color-bar" style="background:${o.cor}"></div>
+      <div class="goal-head" onclick="toggleGoal(${o.id})">
+        <div class="goal-top">
+          <div style="flex:1;min-width:0">
+            <div class="goal-name">${o.titulo}</div>
+            <div class="tags" style="margin-top:8px">
+              <span class="tag t-cat">🎯 até os ${o.idadeAlvo} anos</span>
+              ${dl?`<span class="tag t-cat">📅 ${dl.toLocaleDateString('pt-BR')}</span>`:''}
+            </div>
+          </div>
+          <div class="goal-left ${st.cls}"><div class="goal-left-val">${st.big}</div><div class="goal-left-lbl">${st.small}</div></div>
+        </div>
+      </div>
+      ${mtot ? `<div class="prog-wrap">
+        <div class="prog-hdr"><span>Marcos</span><span>${mdone}/${mtot} · ${mpct}%</span></div>
+        <div class="prog-bar"><div class="prog-fill" style="width:${mpct}%"></div></div>
+      </div>` : ''}
+      ${o.valorAlvo ? `<div class="prog-wrap">
+        <div class="prog-hdr"><span>Guardado</span><span>${brl(o.valorGuardado)} de ${brl(o.valorAlvo)} · ${vpct}%</span></div>
+        <div class="prog-bar"><div class="prog-fill money" style="width:${vpct}%"></div></div>
+      </div>` : ''}
+      ${!mtot && !o.valorAlvo && !open ? `<div class="goal-hint">Adicione marcos ou um valor para acompanhar o progresso.</div>` : ''}
+      ${open ? goalDetails(o) : ''}
+      <button class="exp-btn" onclick="toggleGoal(${o.id})">${open?'▲ Recolher':'▼ Expandir detalhes'}</button>
+    </div>`;
+}
+
+function goalDetails(o) {
+  const active = o.marcos.filter(m=>!m.feito), done = o.marcos.filter(m=>m.feito);
+  const row = m => `<div class="task ${m.feito?'done':''}">
+    <div class="chk ${m.feito?'on':''}" onclick="toggleMarco(${o.id},${m.id})"></div>
+    <span class="task-txt" onclick="toggleMarco(${o.id},${m.id})">${m.texto}</span>
+    <button class="del-task" onclick="delMarco(${o.id},${m.id})" title="Remover">✕</button>
+  </div>`;
+  return `
+    <div class="details">
+      <div class="det-sec">
+        <div class="sec-title">✏ Objetivo</div>
+        <div class="rev-grid">
+          <div class="fgrp" style="grid-column:1/-1">
+            <div class="flbl">Descrição</div>
+            <input type="text" class="finput" value="${o.titulo}" onchange="setGoalField(${o.id},'titulo',this.value.trim())">
+          </div>
+          <div class="fgrp">
+            <div class="flbl">Até os (idade)</div>
+            <input type="number" class="finput" min="1" value="${o.idadeAlvo||''}" onchange="setGoalField(${o.id},'idadeAlvo',+this.value)">
+          </div>
+          <div class="fgrp">
+            <div class="flbl">Valor necessário</div>
+            <div class="prefix-wrap"><span class="prefix">R$</span>
+              <input type="number" class="prefix-in" value="${o.valorAlvo||''}" placeholder="0" onchange="setGoalField(${o.id},'valorAlvo',+this.value)">
+            </div>
+          </div>
+          <div class="fgrp">
+            <div class="flbl">Já guardado</div>
+            <div class="prefix-wrap"><span class="prefix">R$</span>
+              <input type="number" class="prefix-in" value="${o.valorGuardado||''}" placeholder="0" onchange="setGoalField(${o.id},'valorGuardado',+this.value)">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="det-sec">
+        <div class="sec-title">🪜 Marcos</div>
+        <div class="task-list">
+          ${active.length ? active.map(row).join('') : (o.marcos.length ? '' : '<div class="task-none">Quebre o objetivo em etapas menores</div>')}
+        </div>
+        ${doneSection(done.map(row).join(''), done.length, !!S.cardDoneOpen['g'+o.id], `toggleCardDone('g${o.id}')`)}
+        <div class="add-task">
+          <input type="text" class="add-input" id="nm-${o.id}" placeholder="Novo marco..." onkeydown="if(event.key==='Enter')addMarco(${o.id})">
+          <button class="btn-sm btn-pri" onclick="addMarco(${o.id})">+</button>
+        </div>
+      </div>
+
+      <div class="det-sec">
+        <div class="sec-title">📝 Notas</div>
+        <textarea class="notes" placeholder="Por que esse objetivo importa, ideias, referências..."
+          onchange="setGoalField(${o.id},'notas',this.value)">${o.notas||''}</textarea>
+      </div>
+
+      <div class="danger-zone">
+        <button class="btn-sm ${o.concluido?'btn-sec':'btn-pri'}" onclick="toggleGoalWon(${o.id})">${o.concluido?'Reabrir objetivo':'✓ Marcar como conquistado'}</button>
+        <button class="btn-sm btn-dng" onclick="delGoal(${o.id})">Remover objetivo</button>
+      </div>
+    </div>`;
+}
+
+function findGoal(oid) { return S.objetivos.find(o=>o.id===oid); }
+function toggleGoal(oid) { S.goalOpen = S.goalOpen===oid ? null : oid; render(); }
+function setNascimento(v) { S.nascimento = v || null; save(); render(); }
+
+function setGoalField(oid, field, value) {
+  const o = findGoal(oid);
+  if (!o) return;
+  if ((field==='titulo' || field==='idadeAlvo') && !value) { render(); return; }
+  o[field] = value; save();
+  if (field!=='notas') render();
+}
+
+function toggleGoalWon(oid) {
+  const o = findGoal(oid);
+  if (o) { o.concluido = !o.concluido; save(); render(); }
+}
+
+function delGoal(oid) {
+  if (!confirm('Remover este objetivo?')) return;
+  S.objetivos = S.objetivos.filter(o=>o.id!==oid);
+  if (S.goalOpen===oid) S.goalOpen = null;
+  save(); render();
+}
+
+function addMarco(oid) {
+  const inp = document.getElementById(`nm-${oid}`);
+  const o = findGoal(oid);
+  if (!o || !inp || !inp.value.trim()) return;
+  const maxId = o.marcos.reduce((m,x)=>Math.max(m,x.id),0);
+  o.marcos.push({ id:maxId+1, texto:inp.value.trim(), feito:false });
+  save(); render();
+  setTimeout(()=>{ const el=document.getElementById(`nm-${oid}`); if(el) el.focus(); },40);
+}
+
+function toggleMarco(oid, mid) {
+  const o = findGoal(oid), m = o && o.marcos.find(m=>m.id===mid);
+  if (m) { m.feito = !m.feito; save(); render(); }
+}
+
+function delMarco(oid, mid) {
+  const o = findGoal(oid);
+  if (o) { o.marcos = o.marcos.filter(m=>m.id!==mid); save(); render(); }
+}
+
+function openGoalModal() { document.getElementById('goal-overlay').classList.add('show'); document.getElementById('g-titulo').focus(); }
+function closeGoalModal() {
+  document.getElementById('goal-overlay').classList.remove('show');
+  ['g-titulo','g-idade','g-valor'].forEach(id => document.getElementById(id).value = '');
+}
+
+function addGoal() {
+  const titulo = document.getElementById('g-titulo').value.trim();
+  const idadeAlvo = +document.getElementById('g-idade').value;
+  if (!titulo || !idadeAlvo) return;
+  const maxId = S.objetivos.reduce((m,o)=>Math.max(m,o.id),0);
+  S.objetivos.push({
+    id:maxId+1, titulo, idadeAlvo,
+    valorAlvo:+document.getElementById('g-valor').value || 0, valorGuardado:0,
+    marcos:[], notas:'', concluido:false,
+    cor:COLORS[S.objetivos.length%COLORS.length]
+  });
+  save(); closeGoalModal(); render();
 }
 
 function card(p) {
@@ -986,7 +1279,7 @@ function closeCard() {
   updateCard(id);
 }
 document.addEventListener('keydown', e => { if (e.key==='Escape') closeCard(); });
-const VIEW_ORDER = ['all','focus','category','tasks'];
+const VIEW_ORDER = ['all','focus','category','tasks','goals'];
 function setView(v) {
   if (v === S.view) return;
   const dir = VIEW_ORDER.indexOf(v) > VIEW_ORDER.indexOf(S.view) ? 1 : -1;
@@ -1171,14 +1464,17 @@ function addProject() {
 
 document.getElementById('overlay').addEventListener('click', e=>{ if(e.target===e.currentTarget)closeModal(); });
 document.getElementById('task-overlay').addEventListener('click', e=>{ if(e.target===e.currentTarget)closeTaskModal(); });
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeModal(); closeTaskModal(); } });
+document.getElementById('goal-overlay').addEventListener('click', e=>{ if(e.target===e.currentTarget)closeGoalModal(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeModal(); closeTaskModal(); closeGoalModal(); } });
 
 function exportData() {
   const date = new Date().toISOString().slice(0,10);
   const payload = {
     exportedAt: new Date().toISOString(),
     totalProjects: S.projects.length,
-    projects: S.projects
+    projects: S.projects,
+    nascimento: S.nascimento,
+    objetivos: S.objetivos
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
